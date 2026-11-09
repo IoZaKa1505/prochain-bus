@@ -1,0 +1,16 @@
+{
+  "name": "Prochain bus",
+  "short_name": "Prochain bus",
+  "description": "Horaires des bus TEC dans le Hainaut",
+  "lang": "fr-BE",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#FFCD00",
+  "theme_color": "#FFCD00",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}

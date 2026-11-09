@@ -1,0 +1,656 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Prochain bus</title>
+<meta name="description" content="Horaires des bus TEC dans le Hainaut : prochains passages par arrêt, ligne et direction.">
+<meta name="theme-color" content="#FFCD00">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Prochain bus">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="icon" href="icon-192.png">
+<link rel="preload" href="data.json" as="fetch" crossorigin>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Barlow+Semi+Condensed:wght@400;500;600;700&family=Doto:wght@800;900&display=swap">
+<style>
+:root{
+  --sign:#FFCD00;      /* jaune poteau */
+  --ink:#000000;       /* noir plaque */
+  --led:#FFB01F;       /* ambre girouette */
+  --paper:#FFFFFF;
+  --text:#1A1C1E;
+  --muted:#5C6369;
+  --rule:#E2E5E8;
+  --soft:#F3F4F5;
+  --focus:#1450D2;
+  --f-ui:"Barlow Semi Condensed",-apple-system,system-ui,"Segoe UI",Roboto,sans-serif;
+  --f-num:"Barlow Condensed","Barlow Semi Condensed",-apple-system,system-ui,sans-serif;
+  --f-led:"Doto","Barlow Condensed",ui-monospace,monospace;
+  color-scheme:light;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --paper:#202326; --text:#F1F2F0; --muted:#A4AAB0; --rule:#363A3F; --soft:#2A2D31; --focus:#86B4FF;
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --paper:#202326; --text:#F1F2F0; --muted:#A4AAB0; --rule:#363A3F; --soft:#2A2D31; --focus:#86B4FF;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
+body{margin:0;background:var(--paper);color:var(--text);font:400 17px/1.4 var(--f-ui);
+  -webkit-font-smoothing:antialiased;-webkit-tap-highlight-color:transparent;min-height:100vh;
+  padding-bottom:env(safe-area-inset-bottom)}
+button,input{font:inherit;color:inherit}
+button{background:none;border:0;padding:0;cursor:pointer;text-align:inherit}
+a{color:inherit}
+:focus-visible{outline:3px solid var(--focus);outline-offset:2px;border-radius:6px}
+.wrap{max-width:560px;margin:0 auto}
+.num{font-family:var(--f-num);font-variant-numeric:tabular-nums}
+.muted{color:var(--muted)}
+svg.i{width:22px;height:22px;flex:none}
+.vh{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+
+/* ---------- plaque d'accueil ---------- */
+.plate{background:var(--sign);color:var(--ink);padding:calc(env(safe-area-inset-top) + 22px) 16px 20px}
+.plate h1{margin:0;font:700 40px/1 var(--f-num);letter-spacing:-.01em}
+.plate p{margin:6px 0 16px;font-size:16px}
+.search{display:flex;align-items:center;gap:10px;background:#fff;color:#000;border:2px solid var(--ink);
+  border-radius:12px;padding:0 12px;height:52px}
+.search input{flex:1;min-width:0;border:0;outline:0;background:none;font-size:19px;font-weight:500;color:#000;height:100%}
+.search input::placeholder{color:#6b6f73}
+.search input::-webkit-search-cancel-button,.search input::-webkit-search-decoration{-webkit-appearance:none;appearance:none;display:none}
+.search input{-webkit-appearance:none;appearance:none}
+.search:focus-within{box-shadow:0 0 0 3px var(--ink)}
+.search .clear{width:32px;height:32px;display:none;align-items:center;justify-content:center;border-radius:50%}
+.search.has .clear{display:flex}
+.near{display:flex;align-items:center;gap:8px;margin-top:12px;height:44px;padding:0 14px 0 10px;
+  border-radius:10px;background:var(--ink);color:var(--sign);font-weight:600;font-size:17px}
+
+/* ---------- barres de page ---------- */
+.bar{position:sticky;top:0;z-index:5;background:var(--paper);border-bottom:1px solid var(--rule);
+  padding-top:env(safe-area-inset-top)}
+.bar .wrap{display:flex;align-items:center;gap:4px;height:52px;padding:0 6px}
+.bar .t{flex:1;min-width:0;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  opacity:0;transition:opacity .15s}
+.bar.scrolled .t{opacity:1}
+.ib{width:44px;height:44px;display:flex;align-items:center;justify-content:center;border-radius:10px}
+.ib.on{color:#B38700}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .ib.on{color:var(--sign)}}
+:root[data-theme="dark"] .ib.on{color:var(--sign)}
+
+.head{padding:14px 16px 6px}
+.town{font-size:16px;color:var(--muted);font-weight:500}
+.place{margin:0;font:700 30px/1.08 var(--f-num);letter-spacing:-.005em}
+.street{margin-top:4px;font-size:15px;color:var(--muted)}
+
+/* ---------- jours & onglets ---------- */
+.days{display:flex;gap:8px;padding:12px 16px 4px;overflow-x:auto;scrollbar-width:none}
+.days::-webkit-scrollbar{display:none}
+.day{flex:none;height:38px;padding:0 14px;border-radius:19px;border:1.5px solid var(--rule);font-weight:600;font-size:16px;
+  display:inline-flex;align-items:center;gap:6px;position:relative}
+.day[aria-pressed="true"]{background:var(--text);border-color:var(--text);color:var(--paper)}
+.day input{position:absolute;inset:0;opacity:0;width:100%;height:100%;cursor:pointer}
+.tabs{display:flex;margin:10px 16px 0;border-bottom:1px solid var(--rule)}
+.tab{flex:1;height:44px;font-weight:600;color:var(--muted);border-bottom:3px solid transparent;text-align:center}
+.tab[aria-selected="true"]{color:var(--text);border-color:var(--sign)}
+
+/* ---------- pastilles de ligne ---------- */
+.chip{display:inline-flex;align-items:center;justify-content:center;min-width:44px;height:32px;padding:0 7px;
+  background:var(--sign);color:#000;border-radius:7px;font:700 21px/1 var(--f-num);letter-spacing:-.01em;flex:none}
+.chip.s{min-width:30px;height:22px;padding:0 5px;border-radius:5px;font-size:16px}
+.chips{display:flex;flex-wrap:wrap;gap:4px;margin-top:6px}
+.chips .more{font:600 15px/22px var(--f-num);color:var(--muted);padding:0 2px}
+
+/* ---------- listes ---------- */
+.sec{margin:22px 16px 6px;font:700 21px/1.2 var(--f-num)}
+.list{border-top:1px solid var(--rule)}
+.row{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:12px;align-items:center;width:100%;
+  padding:12px 16px;border-bottom:1px solid var(--rule);text-align:left}
+.row.nochip{grid-template-columns:minmax(0,1fr) auto}
+.row:active{background:var(--soft)}
+.row.idle{opacity:.55}
+.dest{min-width:0}
+.dest .a{display:block;font-size:14px;color:var(--muted);line-height:1.2}
+.dest .b{display:block;font-weight:600;font-size:18px;line-height:1.2;overflow-wrap:anywhere}
+.dest .c{display:block;font-size:14px;color:var(--muted);margin-top:2px}
+.when{text-align:right;white-space:nowrap}
+.when .cd{display:block;font:700 22px/1.1 var(--f-num)}
+.when .cd.now{color:#B30000}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .when .cd.now{color:#FF7A6B}}
+:root[data-theme="dark"] .when .cd.now{color:#FF7A6B}
+.when .nx{display:block;font:500 16px/1.2 var(--f-num);color:var(--muted)}
+.dist{font:600 17px var(--f-num);color:var(--muted);white-space:nowrap}
+.chrono{grid-template-columns:3.4em 46px minmax(0,1fr) auto;gap:10px}
+.chrono .chip{justify-self:start}
+.chrono .hm{font:700 22px var(--f-num)}
+.tom{display:block;font-size:13px;color:var(--muted);font-weight:500}
+
+.empty{margin:18px 16px;padding:16px;border-radius:12px;background:var(--soft);color:var(--muted);font-size:16px}
+.more-btn{display:block;margin:14px auto;height:44px;padding:0 20px;border-radius:22px;border:1.5px solid var(--rule);font-weight:600}
+.note{margin:28px 16px 32px;font-size:14px;color:var(--muted);line-height:1.45}
+.warn{margin:12px 16px 0;padding:12px 14px;border-radius:10px;background:#FFF1C2;color:#3D2E00;font-size:15px}
+
+/* ---------- girouette ---------- */
+.gir{margin:14px 16px 4px;border-radius:16px;padding:16px 18px 18px;background-color:#000;color:var(--led);
+  background-image:radial-gradient(rgba(255,176,31,.10) 1px,transparent 1.3px);background-size:5px 5px;
+  box-shadow:inset 0 0 0 1px #2c2c2c}
+.gir .top{display:flex;align-items:center;gap:10px}
+.gir .top .q{margin-left:auto;color:#c9c9c9;font:600 16px var(--f-num)}
+.gir .to{margin-top:12px;font:900 27px/1.1 var(--f-led);text-transform:uppercase;letter-spacing:.02em;
+  text-shadow:0 0 10px rgba(255,176,31,.45);overflow-wrap:anywhere}
+.gir .row2{display:flex;align-items:flex-end;justify-content:space-between;gap:12px;margin-top:14px}
+.gir .big{font:900 60px/.9 var(--f-led);text-shadow:0 0 14px rgba(255,176,31,.5);white-space:nowrap}
+.gir .big small{font-size:30px}
+.gir .at{font:600 26px/1 var(--f-num);color:#fff;text-align:right}
+.gir .at span{display:block;font:500 15px var(--f-ui);color:#b5b5b5;margin-bottom:4px}
+.gir .then{margin-top:14px;padding-top:12px;border-top:1px dashed #3a3a3a;color:#d8d8d8;font:500 17px var(--f-num)}
+.gir .then b{color:#fff;font-weight:600;margin-right:12px}
+.gir.off .to{font-size:22px}
+
+/* ---------- fiche horaire ---------- */
+.fh{margin:8px 16px 0;border-top:2px solid var(--text)}
+.fh-row{display:grid;grid-template-columns:54px 1fr;border-bottom:1px solid var(--rule);min-height:46px}
+.fh-h{display:flex;align-items:center;justify-content:center;font:700 23px var(--f-num);background:var(--soft)}
+.fh-m{display:flex;flex-wrap:wrap;align-items:center;gap:2px;padding:5px 6px}
+.fh-m button{position:relative;min-width:44px;height:36px;padding:0 4px;border-radius:7px;font:600 21px var(--f-num);
+  font-variant-numeric:tabular-nums;text-align:center}
+.fh-m button.past{color:var(--muted);opacity:.5}
+.fh-m button.next{background:var(--ink);color:var(--sign)}
+.fh-m sup{font:600 12px var(--f-ui);margin-left:1px;vertical-align:8px}
+.legend{margin:12px 16px 0;font-size:15px;color:var(--muted)}
+.legend div{margin-top:3px}
+.legend b{color:var(--text);margin-right:6px}
+
+/* ---------- feuille trajet ---------- */
+.sheet-bg{position:fixed;inset:0;z-index:20;background:rgba(0,0,0,.45);display:flex;align-items:flex-end;justify-content:center}
+.sheet{width:100%;max-width:560px;max-height:86vh;background:var(--paper);border-radius:18px 18px 0 0;
+  display:flex;flex-direction:column;padding-bottom:env(safe-area-inset-bottom);animation:up .22s ease-out}
+@keyframes up{from{transform:translateY(40px);opacity:.4}to{transform:none;opacity:1}}
+@media (prefers-reduced-motion:reduce){.sheet{animation:none}.bar .t{transition:none}}
+.sheet-h{display:flex;align-items:center;gap:10px;padding:14px 8px 12px 16px;border-bottom:1px solid var(--rule)}
+.sheet-h .dest{flex:1}
+.sheet-b{overflow-y:auto;padding:6px 0 18px;-webkit-overflow-scrolling:touch}
+.stp{display:grid;grid-template-columns:58px 22px 1fr;align-items:center;width:100%;min-height:44px;padding:0 16px 0 10px;text-align:left}
+.stp .tm{font:600 19px var(--f-num);text-align:right;padding-right:10px}
+.stp .ln{position:relative;align-self:stretch;display:flex;align-items:center;justify-content:center}
+.stp .ln::before{content:"";position:absolute;top:0;bottom:0;left:50%;width:4px;margin-left:-2px;background:var(--sign)}
+.stp:first-child .ln::before{top:50%}
+.stp:last-child .ln::before{bottom:50%}
+.stp .ln i{position:relative;width:12px;height:12px;border-radius:50%;background:var(--paper);border:3px solid var(--text)}
+.stp .nm{padding:8px 0 8px 10px;font-size:16px;line-height:1.2}
+.stp .nm small{display:block;color:var(--muted);font-size:13px}
+.stp.past{color:var(--muted)}
+.stp.past .ln::before{background:var(--rule)}
+.stp.past .ln i{border-color:var(--rule)}
+.stp.cur .nm{font-weight:700;font-size:18px}
+.stp.cur .tm{font-weight:700;font-size:21px}
+.stp.cur .ln i{width:18px;height:18px;background:var(--sign);border:3px solid #000}
+
+.loading{min-height:70vh;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:12px;color:var(--muted)}
+.loading .chip{animation:pulse 1.2s ease-in-out infinite}
+@keyframes pulse{50%{opacity:.4}}
+@media (prefers-reduced-motion:reduce){.loading .chip{animation:none}}
+</style>
+</head>
+<body>
+<div id="app"><div class="loading"><span class="chip">bus</span><span>Chargement des horaires…</span></div></div>
+<div id="sheet"></div>
+
+<script>
+"use strict";
+/* ================== icônes ================== */
+const I = {
+  back:'<svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M15 4.5 7.5 12l7.5 7.5" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+  star:'<svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3.6 2.6 5.3 5.8.8-4.2 4.1 1 5.8L12 16.9l-5.2 2.7 1-5.8-4.2-4.1 5.8-.8z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>',
+  starOn:'<svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3.6 2.6 5.3 5.8.8-4.2 4.1 1 5.8L12 16.9l-5.2 2.7 1-5.8-4.2-4.1 5.8-.8z" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>',
+  pin:'<svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21.2s-6.6-6-6.6-11.1a6.6 6.6 0 0 1 13.2 0c0 5.1-6.6 11.1-6.6 11.1z" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round"/><circle cx="12" cy="10" r="2.4" fill="currentColor"/></svg>',
+  search:'<svg class="i" viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.3" fill="none" stroke="currentColor" stroke-width="2.4"/><path d="m15.3 15.3 5 5" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/></svg>',
+  close:'<svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M6.5 6.5l11 11m0-11-11 11" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg>'
+};
+
+/* ================== outils ================== */
+const esc = s => String(s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const pad = n => (n < 10 ? "0" : "") + n;
+const hm = t => pad(Math.floor(t / 60) % 24) + ":" + pad(t % 60);
+const store = {
+  get(k, d){ try{ const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; }catch(e){ return d; } },
+  set(k, v){ try{ localStorage.setItem(k, JSON.stringify(v)); }catch(e){} }
+};
+const norm = s => s.toLowerCase().replace(/œ/g,"oe").replace(/æ/g,"ae").normalize("NFD").replace(/[̀-ͯ]/g,"")
+  .replace(/[^a-z0-9]+/g," ").trim();
+const SYN = {st:"saint", ste:"sainte", sts:"saints", gare:"sncb", bd:"boulevard", av:"avenue", pl:"place", ch:"chaussee"};
+
+let D, X, T;                     // données, index, colonnes des courses
+const S = { day:null, view:"line", search:"" };   // état d'interface
+
+/* ================== dates ================== */
+function todayParts(){ const d = new Date(); return [d.getFullYear(), d.getMonth() + 1, d.getDate(), d.getHours()*60 + d.getMinutes() + d.getSeconds()/60]; }
+function dayIndexOf(y, m, d){ return Math.round((Date.UTC(y, m - 1, d) - X.d0) / 864e5); }
+function todayIdx(){ const [y,m,d] = todayParts(); return dayIndexOf(y, m, d); }
+function nowMin(){ return todayParts()[3]; }
+function dateOf(idx){ return new Date(X.d0 + idx * 864e5); }
+const fmtLong = new Intl.DateTimeFormat("fr-BE",{weekday:"long", day:"numeric", month:"long", timeZone:"UTC"});
+const fmtShort = new Intl.DateTimeFormat("fr-BE",{weekday:"short", day:"numeric", month:"short", timeZone:"UTC"});
+const fmtDate = new Intl.DateTimeFormat("fr-BE",{day:"numeric", month:"long", year:"numeric", timeZone:"UTC"});
+function isoOf(idx){ return dateOf(idx).toISOString().slice(0,10); }
+function dayLabel(idx){ const t = todayIdx(); return idx === t ? "Aujourd'hui" : idx === t + 1 ? "Demain" : fmtShort.format(dateOf(idx)); }
+function curDay(){ return S.day == null ? todayIdx() : S.day; }
+
+/* ================== chargement & index ================== */
+async function load(){
+  const r = await fetch("data.json").catch(() => (window.caches ? caches.match("data.json") : null));
+  if (!r || !r.ok) throw new Error("data");
+  D = await r.json();
+  T = D.trips;
+  const n = T.t.length, np = D.pats.length;
+  const [ys, ms, ds] = D.feed.start.split("-").map(Number);
+  X = { d0: Date.UTC(ys, ms - 1, ds) };
+  X.cum = D.profs.map(p => { const a = new Int16Array(p.length + 1); for (let i = 0; i < p.length; i++) a[i+1] = a[i] + p[i]; return a; });
+  X.pS = new Int32Array(np).fill(-1); X.pE = new Int32Array(np);
+  for (let k = 0; k < n; k++){ const p = T.p[k]; if (X.pS[p] < 0) X.pS[p] = k; X.pE[p] = k + 1; }
+  const patRoutes = D.pats.map(() => new Set());
+  for (let k = 0; k < n; k++) patRoutes[T.p[k]].add(T.r[k]);
+  X.sDep = D.stops.map(() => []);
+  D.pats.forEach(([seq, nop], p) => { const no = new Set(nop); for (let i = 0; i < seq.length - 1; i++) if (!no.has(i)) X.sDep[seq[i]].push(p, i); });
+  X.gStops = D.groups.map(() => []);
+  D.stops.forEach((s, i) => X.gStops[s[0]].push(i));
+  X.gRoutes = D.groups.map((g, gi) => { const set = new Set();
+    for (const s of X.gStops[gi]){ const a = X.sDep[s]; for (let j = 0; j < a.length; j += 2) for (const r of patRoutes[a[j]]) set.add(r); }
+    return [...set].sort((a, b) => a - b); });
+  X.gQuais = D.groups.map((g, gi) => new Set(X.gStops[gi].map(s => D.stops[s][1]).filter(Boolean)).size > 1);
+  X.gid = new Map(D.gid.map((id, i) => [id, i]));
+  X.rkey = D.routes.map(r => r[0] + "|" + r[1]);
+  X.rByKey = new Map(X.rkey.map((k, i) => [k, i]));
+  X.tok = D.groups.map(g => ({
+    n: norm(g[0] + " " + g[1]).split(" ").filter(Boolean).map(w => SYN[w] || w),
+    s: norm(g[2]).split(" ").filter(Boolean).map(w => SYN[w] || w),
+    t: norm(g[0]).split(" ")[0] || ""
+  }));
+}
+
+/* départs d'un groupe d'arrêts pour un jour (minutes depuis minuit de ce jour) */
+function deps(g, day, f){
+  const out = [];
+  if (day < 0 || day >= D.feed.days) return out;
+  for (const s of X.gStops[g]){
+    const a = X.sDep[s];
+    for (let j = 0; j < a.length; j += 2){
+      const p = a[j], i = a[j+1];
+      for (let k = X.pS[p]; k < X.pE[p]; k++){
+        if (f && (T.r[k] !== f.r || T.d[k] !== f.d)) continue;
+        if (D.svc[T.s[k]].charCodeAt(day) !== 49) continue;
+        out.push({k, i, s, t: T.t[k] + X.cum[T.f[k]][i], off:0});
+      }
+    }
+  }
+  return out.sort((a, b) => a.t - b.t);
+}
+/* prochains départs à partir de maintenant (y compris après minuit, marqués "demain") */
+function nextDeps(g, f, limit){
+  const td = todayIdx(), now = Math.floor(nowMin());
+  const out = [];
+  for (const d of deps(g, td - 1, f)) if (d.t - 1440 >= now) out.push({...d, t: d.t - 1440});
+  for (const d of deps(g, td, f)) if (d.t >= now) out.push(d);
+  if (out.length < limit) for (const d of deps(g, td + 1, f)) { out.push({...d, t: d.t + 1440, off:1}); if (out.length >= limit) break; }
+  return out.sort((a, b) => a.t - b.t).slice(0, limit);
+}
+function countdown(t){
+  const m = t - Math.floor(nowMin());
+  if (m <= 0) return {txt:"maintenant", now:true};
+  if (m < 60) return {txt: m + " min", now: m <= 2};
+  const h = Math.floor(m / 60), r = m % 60;
+  return {txt: h + " h " + pad(r), now:false};
+}
+/* lignes + directions desservies au départ d'un groupe */
+function lineDirs(g){
+  const map = new Map();
+  for (const s of X.gStops[g]){
+    const a = X.sDep[s];
+    for (let j = 0; j < a.length; j += 2){
+      const p = a[j];
+      for (let k = X.pS[p]; k < X.pE[p]; k++){
+        const key = T.r[k] * 2 + T.d[k];
+        let e = map.get(key); if (!e){ e = {r:T.r[k], d:T.d[k], heads:new Map()}; map.set(key, e); }
+        e.heads.set(T.h[k], (e.heads.get(T.h[k]) || 0) + 1);
+      }
+    }
+  }
+  return [...map.values()].map(e => { e.h = [...e.heads.entries()].sort((a, b) => b[1] - a[1])[0][0]; return e; })
+    .sort((a, b) => a.r - b.r || a.d - b.d);
+}
+
+/* ================== favoris & récents ================== */
+const favKey = (g, r, d) => r == null ? D.gid[g] : D.gid[g] + "§" + X.rkey[r] + "§" + d;
+function favList(){ return store.get("pb_favs", []); }
+function isFav(g, r, d){ return favList().includes(favKey(g, r, d)); }
+function toggleFav(g, r, d){
+  const k = favKey(g, r, d), l = favList(), i = l.indexOf(k);
+  if (i >= 0) l.splice(i, 1); else l.push(k);
+  store.set("pb_favs", l); return i < 0;
+}
+function parseFav(k){
+  const [gid, rk, d] = k.split("§");
+  const g = X.gid.get(gid); if (g == null) return null;
+  if (rk == null) return {g};
+  const r = X.rByKey.get(rk); if (r == null) return null;
+  return {g, r, d:+d};
+}
+function pushRecent(g){
+  const l = store.get("pb_recent", []).filter(x => x !== D.gid[g]);
+  l.unshift(D.gid[g]); store.set("pb_recent", l.slice(0, 6));
+}
+
+/* ================== recherche ================== */
+function search(q){
+  const qt = norm(q).split(" ").filter(Boolean).map(w => SYN[w] || w);
+  if (!qt.length) return [];
+  const res = [];
+  for (let g = 0; g < D.groups.length; g++){
+    const tk = X.tok[g]; let score = 0, ok = true;
+    for (const w of qt){
+      let best = 0;
+      for (const x of tk.n){ if (x === w) { best = 4; break; } if (x.startsWith(w)) best = Math.max(best, 3); else if (w.length > 3 && x.includes(w)) best = Math.max(best, 1.5); }
+      if (best < 3) for (const x of tk.s){ if (x === w) best = Math.max(best, 2); else if (x.startsWith(w)) best = Math.max(best, 1.2); }
+      if (!best){ ok = false; break; }
+      score += best;
+    }
+    if (!ok) continue;
+    if (tk.t.startsWith(qt[0])) score += 1.5;
+    if (X.gRoutes[g].length) score += .5; else score -= 2;
+    score -= tk.n.length * .05;
+    res.push([score, g]);
+  }
+  return res.sort((a, b) => b[0] - a[0]).slice(0, 40).map(x => x[1]);
+}
+
+/* ================== morceaux d'interface ================== */
+const chip = (r, s) => `<span class="chip${s ? " s" : ""}" aria-label="Ligne ${esc(D.routes[r][0])}">${esc(D.routes[r][0])}</span>`;
+function chips(g, max = 9){
+  const rs = X.gRoutes[g]; if (!rs.length) return `<div class="chips"><span class="more">Terminus, pas de départ</span></div>`;
+  return `<div class="chips">${rs.slice(0, max).map(r => chip(r, 1)).join("")}${rs.length > max ? `<span class="more">+${rs.length - max}</span>` : ""}</div>`;
+}
+const headTxt = h => { const [a, b] = D.heads[h]; return (a + " " + b).trim(); };
+const destHTML = (h, sub) => { const [a, b] = D.heads[h];
+  return `<span class="dest">${b ? `<span class="a">${esc(a)}</span><span class="b">${esc(b)}</span>` : `<span class="b">${esc(a)}</span>`}${sub ? `<span class="c">${sub}</span>` : ""}</span>`; };
+const stopName = g => { const [a, b] = D.groups[g]; return (a && b) ? a + " " + b : (a || b); };
+const quai = (g, s) => X.gQuais[g] && D.stops[s][1] ? "Quai " + esc(D.stops[s][1]) : "";
+
+function bar(title, right = ""){
+  return `<header class="bar" id="bar"><div class="wrap"><button class="ib" data-act="back" aria-label="Retour">${I.back}</button>
+    <div class="t">${esc(title)}</div>${right}</div></header>`;
+}
+function favBtn(g, r, d){
+  const on = isFav(g, r, d);
+  return `<button class="ib${on ? " on" : ""}" data-act="fav" data-g="${g}"${r != null ? ` data-r="${r}" data-d="${d}"` : ""}
+    aria-pressed="${on}" aria-label="${on ? "Retirer des favoris" : "Ajouter aux favoris"}">${on ? I.starOn : I.star}</button>`;
+}
+function stopHead(g){
+  const [a, b, c] = D.groups[g];
+  return `<div class="wrap head">${a && b ? `<div class="town">${esc(a)}</div>` : ""}<h1 class="place">${esc(b || a)}</h1>${c ? `<div class="street">${esc(c)}</div>` : ""}</div>`;
+}
+function daysBar(){
+  const t = todayIdx(), cur = curDay(), max = D.feed.days - 1;
+  const other = cur !== t && cur !== t + 1;
+  const b = (idx, label) => `<button class="day" data-act="day" data-day="${idx}" aria-pressed="${cur === idx}">${label}</button>`;
+  return `<div class="wrap days" role="group" aria-label="Jour">${b(t, "Aujourd'hui")}${t + 1 <= max ? b(t + 1, "Demain") : ""}
+    <label class="day" aria-pressed="${other}">${other ? esc(fmtShort.format(dateOf(cur))) : "Autre jour"}
+      <input type="date" data-act="date" min="${isoOf(Math.max(0, t))}" max="${isoOf(max)}" value="${isoOf(cur)}" aria-label="Choisir une date"></label></div>`;
+}
+function validity(){
+  const t = todayIdx(), end = D.feed.days - 1;
+  if (t > end) return `<div class="warn">Les horaires chargés ont expiré le ${fmtDate.format(dateOf(end))}. Il faut mettre à jour le fichier de données.</div>`;
+  if (t < 0) return `<div class="warn">Les horaires chargés commencent le ${fmtDate.format(dateOf(0))}.</div>`;
+  if (end - t < 14) return `<div class="warn">Les horaires chargés sont valables jusqu'au ${fmtDate.format(dateOf(end))}. Pense à les mettre à jour.</div>`;
+  return "";
+}
+const footer = () => `<p class="note wrap">Horaires théoriques issus des données ouvertes TEC, valables du ${fmtDate.format(dateOf(0))} au ${fmtDate.format(dateOf(D.feed.days - 1))}. Les retards en temps réel ne sont pas pris en compte.</p>`;
+
+/* ================== vues ================== */
+const app = document.getElementById("app");
+let tick = null;
+
+function viewHome(){
+  app.innerHTML = `
+  <header class="plate"><div class="wrap">
+    <h1>Prochain bus</h1><p>Horaires des bus TEC dans le Hainaut</p>
+    <label class="search${S.search ? " has" : ""}" id="sbox">${I.search}<span class="vh">Rechercher un arrêt</span>
+      <input id="q" type="search" inputmode="search" enterkeyhint="search" autocomplete="off" autocorrect="off" spellcheck="false"
+        placeholder="Rechercher un arrêt" value="${esc(S.search)}">
+      <button class="clear" data-act="clear" aria-label="Effacer">${I.close}</button></label>
+    <button class="near" data-act="go" data-to="#/proches">${I.pin}Arrêts près de moi</button>
+  </div></header>
+  <main class="wrap" id="homeBody"></main>`;
+  const q = document.getElementById("q");
+  q.addEventListener("input", () => { S.search = q.value; document.getElementById("sbox").classList.toggle("has", !!q.value); homeBody(); });
+  homeBody();
+  tick = () => { if (!S.search) homeBody(); };
+}
+function homeBody(){
+  const el = document.getElementById("homeBody"); if (!el) return;
+  if (S.search.trim()){
+    const r = search(S.search);
+    el.innerHTML = r.length ? `<div class="list" style="margin-top:8px">${r.map(g => stopRow(g)).join("")}</div>`
+      : `<div class="empty">Aucun arrêt ne correspond à « ${esc(S.search)} ». Essaie avec le nom de la commune, par exemple « Boussu Place ».</div>`;
+    return;
+  }
+  const favs = favList().map(parseFav).filter(Boolean);
+  let h = validity();
+  h += `<h2 class="sec">Favoris</h2>`;
+  if (!favs.length) h += `<div class="empty">Cherche ton arrêt, puis touche l'étoile pour le retrouver ici avec ses prochains passages.</div>`;
+  else h += `<div class="list">${favs.map(f => f.r != null ? favLineRow(f) : favStopRow(f.g)).join("")}</div>`;
+  const rec = store.get("pb_recent", []).map(id => X.gid.get(id)).filter(g => g != null && !favs.some(f => f.r == null && f.g === g)).slice(0, 5);
+  if (rec.length) h += `<h2 class="sec">Consultés récemment</h2><div class="list">${rec.map(g => stopRow(g)).join("")}</div>`;
+  h += footer();
+  el.innerHTML = h;
+}
+function stopRow(g, right = ""){
+  const [a, b, c] = D.groups[g];
+  return `<button class="row nochip" data-act="go" data-to="#/a/${g}"><span class="dest">
+    ${a && b ? `<span class="a">${esc(a)}</span>` : ""}<span class="b">${esc(b || a)}</span>${c ? `<span class="c">${esc(c)}</span>` : ""}${chips(g)}</span>${right}</button>`;
+}
+function favLineRow(f){
+  const n = nextDeps(f.g, {r:f.r, d:f.d}, 3);
+  const h = n.length ? T.h[n[0].k] : lineDirs(f.g).find(e => e.r === f.r && e.d === f.d)?.h;
+  if (h == null) return "";
+  return `<button class="row" data-act="go" data-to="#/a/${f.g}/l/${f.r}/${f.d}">${chip(f.r)}${destHTML(h, esc(stopName(f.g)))}${whenHTML(n)}</button>`;
+}
+function favStopRow(g){
+  const n = nextDeps(g, null, 4);
+  const list = n.length ? n.map(d => `<span style="white-space:nowrap;margin-right:10px">${chip(T.r[d.k], 1)} <span class="num">${hm(d.t)}</span></span>`).join("") : `<span class="muted">Plus de passage prévu</span>`;
+  const [a, b] = D.groups[g];
+  return `<button class="row nochip" data-act="go" data-to="#/a/${g}"><span class="dest">${a && b ? `<span class="a">${esc(a)}</span>` : ""}<span class="b">${esc(b || a)}</span>
+    <span class="chips" style="margin-top:8px">${list}</span></span><span></span></button>`;
+}
+function whenHTML(n){
+  if (!n.length) return `<span class="when"><span class="nx">Pas aujourd'hui</span></span>`;
+  const c = countdown(n[0].t), far = n[0].off || n[0].t - Math.floor(nowMin()) >= 60;
+  const first = far ? `<span class="cd">${hm(n[0].t)}</span>` : `<span class="cd${c.now ? " now" : ""}">${c.txt}</span>`;
+  const rest = n.slice(far ? 1 : 0, 3).map(d => hm(d.t) + (d.off && !n[0].off ? " demain" : "")).join("  ");
+  return `<span class="when">${first}${n[0].off ? `<span class="tom">demain</span>` : ""}<span class="nx">${rest}</span></span>`;
+}
+
+function viewStop(g){
+  pushRecent(g);
+  const day = curDay(), isToday = day === todayIdx();
+  const ld = lineDirs(g);
+  let body;
+  if (!ld.length) body = `<div class="empty">Aucun bus ne part de cet arrêt : c'est un terminus ou un arrêt de descente uniquement.</div>`;
+  else if (S.view === "line"){
+    body = `<div class="list" style="margin-top:4px">${ld.map(e => {
+      let n, right;
+      if (isToday){ n = nextDeps(g, {r:e.r, d:e.d}, 3); right = whenHTML(n); }
+      else { n = deps(g, day, {r:e.r, d:e.d});
+        right = n.length ? `<span class="when"><span class="cd">${hm(n[0].t)}</span><span class="nx">${n.length} passage${n.length > 1 ? "s" : ""}</span></span>` : `<span class="when"><span class="nx">Pas ce jour-là</span></span>`; }
+      const h = n.length ? T.h[n[0].k] : e.h;
+      const q = n.length ? quai(g, n[0].s) : "";
+      return `<button class="row${n.length ? "" : " idle"}" data-act="go" data-to="#/a/${g}/l/${e.r}/${e.d}">${chip(e.r)}${destHTML(h, q)}${right}</button>`;
+    }).join("")}</div>`;
+  } else {
+    const all = isToday ? nextDeps(g, null, S.limit || 40) : deps(g, day, null);
+    body = all.length ? `<div class="list" style="margin-top:4px">${all.map(d => {
+      const c = isToday && !d.off ? countdown(d.t) : null;
+      return `<button class="row chrono" data-act="trip" data-k="${d.k}" data-i="${d.i}" data-g="${g}">
+        <span class="hm num">${hm(d.t)}${d.off ? `<span class="tom">demain</span>` : ""}</span>${chip(T.r[d.k], 1)}${destHTML(T.h[d.k], quai(g, d.s))}
+        <span class="when">${c ? `<span class="cd${c.now ? " now" : ""}" style="font-size:18px">${c.txt}</span>` : ""}</span></button>`; }).join("")}</div>
+        ${isToday && all.length >= (S.limit || 40) ? `<button class="more-btn" data-act="more">Voir plus de départs</button>` : ""}`
+      : `<div class="empty">Aucun passage ${isToday ? "prévu pour le reste de la journée" : "ce jour-là"}.</div>`;
+  }
+  app.innerHTML = bar(stopName(g), favBtn(g)) + `<main>${stopHead(g)}${daysBar()}
+    <div class="wrap"><div class="tabs" role="tablist">
+      <button class="tab" role="tab" data-act="vw" data-v="line" aria-selected="${S.view === "line"}">Par ligne</button>
+      <button class="tab" role="tab" data-act="vw" data-v="chrono" aria-selected="${S.view !== "line"}">Tous les départs</button></div>
+    ${body}${footer()}</div></main>`;
+  tick = isToday ? () => viewStop(g) : null;
+}
+
+function viewLine(g, r, d){
+  const day = curDay(), isToday = day === todayIdx();
+  const list = deps(g, day, {r, d});
+  const ld = lineDirs(g).find(e => e.r === r && e.d === d);
+  if (!ld) { location.hash = "#/a/" + g; return; }
+  // destination principale du jour + renvois pour les autres terminus
+  const cnt = new Map(); list.forEach(x => cnt.set(T.h[x.k], (cnt.get(T.h[x.k]) || 0) + 1));
+  const main = list.length ? [...cnt.entries()].sort((a, b) => b[1] - a[1])[0][0] : ld.h;
+  const letters = new Map(); [...cnt.keys()].filter(h => h !== main).forEach((h, i) => letters.set(h, "abcdefghij"[i] || "*"));
+  const now = Math.floor(nowMin());
+
+  let gir = "";
+  if (isToday){
+    const n = nextDeps(g, {r, d}, 4);
+    if (n.length){
+      const x = n[0], c = countdown(x.t), q = quai(g, x.s);
+      const far = x.off || x.t - Math.floor(nowMin()) >= 60;
+      const big = far ? hm(x.t) : (c.txt === "maintenant" ? "0<small> min</small>" : c.txt.replace(" min", "<small> min</small>"));
+      gir = `<section class="gir" aria-live="polite" aria-label="Prochain passage">
+        <div class="top">${chip(r)}${q ? `<span class="q">${q}</span>` : ""}</div>
+        <div class="to">${esc(headTxt(T.h[x.k]))}</div>
+        <div class="row2"><div class="big">${big}</div>
+          <div class="at">${x.off ? `<span>départ</span>demain` : far ? `<span>départ dans</span>${c.txt}` : `<span>${c.txt === "maintenant" ? "départ" : "départ à"}</span>${hm(x.t)}`}</div></div>
+        ${n.length > 1 ? `<div class="then">Ensuite ${n.slice(1).map(y => `<b>${hm(y.t)}</b>`).join("")}</div>` : ""}
+      </section>`;
+    } else gir = `<section class="gir off"><div class="top">${chip(r)}</div><div class="to">Plus de passage prévu</div></section>`;
+  }
+  // fiche horaire par heure
+  let nextMarked = false; const rows = new Map();
+  for (const x of list){
+    const H = Math.floor(x.t / 60);
+    if (!rows.has(H)) rows.set(H, []);
+    const past = isToday && x.t < now;
+    let cls = past ? "past" : "";
+    if (isToday && !past && !nextMarked){ cls = "next"; nextMarked = true; }
+    const L = letters.get(T.h[x.k]);
+    rows.get(H).push(`<button class="${cls}" data-act="trip" data-k="${x.k}" data-i="${x.i}" data-g="${g}" aria-label="${hm(x.t)}${L ? ", vers " + esc(headTxt(T.h[x.k])) : ""}">${pad(x.t % 60)}${L ? `<sup>${L}</sup>` : ""}</button>`);
+  }
+  const fiche = list.length ? `<h2 class="sec">${isToday ? "Horaire d'aujourd'hui" : "Horaire du " + esc(fmtLong.format(dateOf(day)))}</h2>
+    <div class="fh">${[...rows.entries()].map(([H, ms]) => `<div class="fh-row"><div class="fh-h num">${pad(H % 24)}</div><div class="fh-m">${ms.join("")}</div></div>`).join("")}</div>
+    <div class="legend"><div><b>→</b>${esc(headTxt(main))}</div>${[...letters.entries()].map(([h, L]) => `<div><b>${L}</b>→ ${esc(headTxt(h))}</div>`).join("")}
+    <div style="margin-top:8px">Touche une heure pour voir tout le trajet.</div></div>`
+    : `<div class="empty">Pas de passage de la ligne ${esc(D.routes[r][0])} vers ${esc(headTxt(main))} ${isToday ? "aujourd'hui" : "ce jour-là"}.</div>`;
+
+  app.innerHTML = bar(D.routes[r][0] + " → " + headTxt(main), favBtn(g, r, d)) + `<main><div class="wrap head">
+      <div class="town">Ligne ${esc(D.routes[r][0])}, ${esc(D.routes[r][1])}</div>
+      <h1 class="place">Vers ${esc(headTxt(main))}</h1>
+      <div class="street">Depuis <a href="#/a/${g}">${esc(stopName(g))}</a></div></div>
+    ${daysBar()}<div class="wrap">${gir}${fiche}${footer()}</div></main>`;
+  tick = isToday ? () => viewLine(g, r, d) : null;
+}
+
+function viewNear(){
+  app.innerHTML = bar("Arrêts près de moi") + `<main class="wrap"><div class="head"><h1 class="place">Arrêts près de moi</h1></div><div id="nearBody"><div class="empty">Recherche de ta position…</div></div></main>`;
+  tick = null;
+  const el = document.getElementById("nearBody");
+  if (!navigator.geolocation){ el.innerHTML = `<div class="empty">La localisation n'est pas disponible sur cet appareil.</div>`; return; }
+  navigator.geolocation.getCurrentPosition(pos => {
+    const {latitude:la, longitude:lo} = pos.coords, kx = 111320 * Math.cos(la * Math.PI / 180);
+    const res = [];
+    D.groups.forEach((g, i) => { if (!X.gRoutes[i].length) return;
+      const dm = Math.hypot((g[3] - la) * 110574, (g[4] - lo) * kx); if (dm < 3000) res.push([dm, i]); });
+    res.sort((a, b) => a[0] - b[0]);
+    const top = res.slice(0, 15);
+    el.innerHTML = top.length ? `<div class="list">${top.map(([dm, g]) => stopRow(g, `<span class="dist">${dm < 1000 ? Math.round(dm / 10) * 10 + " m" : (dm / 1000).toFixed(1).replace(".", ",") + " km"}</span>`)).join("")}</div>`
+      : `<div class="empty">Aucun arrêt TEC Hainaut à moins de 3 km de ta position.</div>`;
+  }, err => {
+    el.innerHTML = `<div class="empty">${err.code === 1 ? "La localisation est refusée. Autorise-la pour cette app dans les réglages de ton téléphone, puis réessaie." : "Ta position n'a pas pu être trouvée. Réessaie dans un endroit plus dégagé."}</div>
+      <button class="more-btn" data-act="go" data-to="#/proches" data-force="1">Réessayer</button>`;
+  }, {enableHighAccuracy:true, timeout:12000, maximumAge:30000});
+}
+
+/* ================== feuille "trajet complet" ================== */
+const sheetEl = document.getElementById("sheet");
+function openTrip(k, i, g){
+  const seq = D.pats[T.p[k]][0], cum = X.cum[T.f[k]], t0 = T.t[k];
+  const rows = seq.map((s, j) => {
+    const sg = D.stops[s][0], [a, b] = D.groups[sg];
+    const cls = j < i ? "past" : j === i ? "cur" : "";
+    return `<button class="stp ${cls}" data-act="go" data-to="#/a/${sg}" data-close="1"><span class="tm num">${hm(t0 + cum[j])}</span><span class="ln"><i></i></span>
+      <span class="nm">${a && b ? `<small>${esc(a)}</small>` : ""}${esc(b || a)}</span></button>`;
+  }).join("");
+  sheetEl.innerHTML = `<div class="sheet-bg" data-act="close"><div class="sheet" role="dialog" aria-modal="true" aria-label="Trajet complet">
+    <div class="sheet-h">${chip(T.r[k])}${destHTML(T.h[k], esc(D.routes[T.r[k]][1]))}<button class="ib" data-act="close" aria-label="Fermer">${I.close}</button></div>
+    <div class="sheet-b">${rows}</div></div></div>`;
+  const cur = sheetEl.querySelector(".stp.cur");
+  if (cur) cur.scrollIntoView({block:"center"});
+  sheetEl.querySelector(".sheet-h .ib").focus({preventScroll:true});
+}
+function closeSheet(){ sheetEl.innerHTML = ""; }
+
+/* ================== routeur & événements ================== */
+let lastHash = null;
+function route(){
+  closeSheet();
+  const h = location.hash || "#/";
+  const changed = h !== lastHash; lastHash = h;
+  let m;
+  if ((m = h.match(/^#\/a\/(\d+)\/l\/(\d+)\/(\d+)/)) && D.groups[+m[1]] && D.routes[+m[2]]) viewLine(+m[1], +m[2], +m[3]);
+  else if ((m = h.match(/^#\/a\/(\d+)/)) && D.groups[+m[1]]) { if (changed) S.limit = 40; viewStop(+m[1]); }
+  else if (h === "#/proches") viewNear();
+  else { S.day = null; viewHome(); }
+  if (changed) window.scrollTo(0, 0);
+  updateBar();
+}
+function go(to){ if (location.hash === to) route(); else location.hash = to; }
+document.addEventListener("click", e => {
+  const el = e.target.closest("[data-act]"); if (!el) return;
+  const a = el.dataset.act;
+  if (a === "close"){ if (e.target === el || el.classList.contains("ib")) closeSheet(); return; }
+  if (a === "go"){ e.preventDefault(); if (el.dataset.close) closeSheet(); go(el.dataset.to); }
+  else if (a === "back"){ const h = location.hash, m = h.match(/^#\/a\/(\d+)\/l\//);
+    if (history.length > 1 && sessionStorage.getItem("pb_nav")) history.back(); else location.hash = m ? "#/a/" + m[1] : "#/"; }
+  else if (a === "fav"){ const r = el.dataset.r != null ? +el.dataset.r : null; toggleFav(+el.dataset.g, r, r != null ? +el.dataset.d : null); route(); }
+  else if (a === "day"){ S.day = +el.dataset.day; route(); }
+  else if (a === "vw"){ S.view = el.dataset.v; store.set("pb_view", S.view); route(); }
+  else if (a === "more"){ S.limit = (S.limit || 40) + 40; route(); }
+  else if (a === "trip"){ openTrip(+el.dataset.k, +el.dataset.i, +el.dataset.g); }
+  else if (a === "clear"){ e.preventDefault(); S.search = ""; const q = document.getElementById("q"); q.value = ""; document.getElementById("sbox").classList.remove("has"); homeBody(); q.focus(); }
+});
+document.addEventListener("change", e => {
+  if (e.target.dataset.act === "date" && e.target.value){ const [y, m, d] = e.target.value.split("-").map(Number); const idx = dayIndexOf(y, m, d);
+    if (idx >= 0 && idx < D.feed.days){ S.day = idx; route(); } }
+});
+document.addEventListener("keydown", e => { if (e.key === "Escape") closeSheet(); });
+window.addEventListener("hashchange", () => { try{ sessionStorage.setItem("pb_nav", "1"); }catch(e){} route(); });
+function updateBar(){ const b = document.getElementById("bar"); if (b) b.classList.toggle("scrolled", window.scrollY > 70); }
+window.addEventListener("scroll", updateBar, {passive:true});
+setInterval(() => { if (tick && !document.hidden && !sheetEl.innerHTML) tick(); }, 20000);
+document.addEventListener("visibilitychange", () => { if (!document.hidden && tick) tick(); });
+
+(async () => {
+  S.view = store.get("pb_view", "line");
+  try { await load(); route(); }
+  catch (e) {
+    app.innerHTML = `<div class="loading"><span class="chip">!</span><span>Les horaires n'ont pas pu être chargés. Vérifie ta connexion, puis réessaie.</span>
+      <button class="more-btn" onclick="location.reload()">Réessayer</button></div>`;
+  }
+  if ("serviceWorker" in navigator && (location.protocol === "https:" || location.hostname === "localhost" || location.hostname === "127.0.0.1")) navigator.serviceWorker.register("sw.js").catch(() => {});
+})();
+</script>
+</body>
+</html>
