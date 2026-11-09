@@ -190,12 +190,56 @@ def pick_mask(pk):
     # indices des arrêts SANS montée (rare) -> liste courte
     return [i for i, v in enumerate(pk) if v == 0]
 
+# ---------- couleurs automatiques des lignes (pas les couleurs officielles TEC) ----------
+# [fond, texte] — contrastes vérifiés pour des chiffres en gras
+PALETTE = [["#FFCD00", "#000000"], ["#0067C6", "#FFFFFF"], ["#E2001A", "#FFFFFF"], ["#00964B", "#FFFFFF"],
+           ["#F07D00", "#000000"], ["#7B2C8F", "#FFFFFF"], ["#00A0C6", "#000000"], ["#E6007E", "#FFFFFF"],
+           ["#8DC63F", "#000000"], ["#8B5A2B", "#FFFFFF"], ["#1D3A8A", "#FFFFFF"], ["#F4A6C6", "#000000"],
+           ["#007C73", "#FFFFFF"], ["#A3D8F4", "#000000"], ["#6D6E71", "#FFFFFF"]]
+route_groups = defaultdict(set)
+for r in rows:
+    for s in pats[r[4]][0]:
+        route_groups[r[0]].add(gidx[stops.grp.iloc[s]])
+short = [rr.route_short_name for rr in routes.itertuples()]
+base = [re.match(r"\d*", n).group(0) or n for n in short]
+# familles : même numéro de base (11, 11/, 14B…) et au moins un arrêt en commun
+fam = list(range(len(short)))
+def find(x):
+    while fam[x] != x:
+        fam[x] = fam[fam[x]]; x = fam[x]
+    return x
+for a in range(len(short)):
+    for b in range(a + 1, len(short)):
+        if base[a] == base[b] and route_groups[a] & route_groups[b]:
+            fam[find(a)] = find(b)
+fam_groups = defaultdict(set)
+for r in range(len(short)): fam_groups[find(r)] |= route_groups[r]
+fams = sorted(fam_groups, key=lambda f: -len(fam_groups[f]))
+# coloration : les familles qui partagent des arrêts évitent la même couleur
+weight = {f: Counter() for f in fams}
+for i, a in enumerate(fams):
+    for b in fams[i + 1:]:
+        w = len(fam_groups[a] & fam_groups[b])
+        if w: weight[a][b] = w; weight[b][a] = w
+fam_col = {}
+order = sorted(fams, key=lambda f: -sum(weight[f].values()))
+for n, f in enumerate(order):
+    cost = [0] * len(PALETTE)
+    for g, w in weight[f].items():
+        if g in fam_col: cost[fam_col[g]] += w
+    # couleur préférée : suit le numéro (1 jaune, 2 bleu, 3 rouge…) quand ça ne crée pas de confusion
+    start = (int(base[f]) - 1) % len(PALETTE) if base[f].isdigit() and int(base[f]) > 0 else n % len(PALETTE)
+    fam_col[f] = min(range(len(PALETTE)), key=lambda c: (cost[c], (c - start) % len(PALETTE)))
+route_col = [fam_col[find(r)] for r in range(len(short))]
+
 data = {
     "v": 1,
     "feed": {"start": d0.isoformat(), "days": ndays, "end": d1.isoformat(),
              "version": rd("feed_info.txt").feed_version.iloc[0].strip(), "built": dt.date.today().isoformat()},
     "svc": svc_str,
     "routes": [[r.route_short_name, r.route_long_name] for r in routes.itertuples()],
+    "pal": PALETTE,
+    "rcol": route_col,
     "heads": [list(h) for h in fmt_heads],
     # groupe d'arrêts : [commune, lieu, rue, lat, lon]
     "groups": [[*split_name(g[0]), g[1], round(g[2], 5), round(g[3], 5)] for g in groups],
