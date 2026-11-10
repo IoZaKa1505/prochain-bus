@@ -247,13 +247,10 @@ const BUSES = [
       <path d="M68 28 Q46 30 40 46" stroke="${INK}" stroke-width="4" fill="none"/><rect x="26" y="44" width="22" height="50" rx="7" fill="${INK}"/>
       <path d="M332 28 Q354 30 360 46" stroke="${INK}" stroke-width="4" fill="none"/><rect x="352" y="44" width="22" height="50" rx="7" fill="${INK}"/>`
   },
-  { // articulé classique : dôme gris, flancs gris et rouge
+  { // articulé classique tout jaune
     disp: {x: 78, y: 54, w: 244, h: 38},
     body: "M58 44 Q58 14 92 12 L308 12 Q342 14 342 44 L344 288 Q344 300 332 300 L68 300 Q56 300 56 288 Z",
-    draw: d => `<path d="M42 58 L58 46 L56 296 L42 286 Z" fill="#9AA0A6"/><path d="M42 118 L57 104 L56 212 L42 232 Z" fill="#E2001A"/>
-      <path d="M358 58 L342 46 L344 296 L358 286 Z" fill="#9AA0A6"/><path d="M358 118 L343 104 L344 212 L358 232 Z" fill="#E2001A"/>
-      <path d="M58 46 Q58 14 92 12 L308 12 Q342 14 342 46 Z" fill="url(#ROOF)"/>
-      <path d="M64 48 L336 48 L338 214 Q200 230 62 214 Z" fill="url(#GL)"/>${glare(100, 212)}${d}
+    draw: d => `<path d="M64 48 L336 48 L338 214 Q200 230 62 214 Z" fill="url(#GL)"/>${glare(100, 212)}${d}
       ${wipers(214)}${fleetNo(332, 110, "5.703")}
       <path d="M70 238 Q200 252 330 238" stroke="rgba(0,0,0,.18)" stroke-width="2" fill="none"/>
       <rect x="68" y="262" width="52" height="17" rx="7" fill="#E9EEF2" stroke="#59606a" stroke-width="1.5"/><rect x="280" y="262" width="52" height="17" rx="7" fill="#E9EEF2" stroke="#59606a" stroke-width="1.5"/>
