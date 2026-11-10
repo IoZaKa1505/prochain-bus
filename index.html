@@ -16,7 +16,7 @@
 <link rel="preload" href="data.json" as="fetch" crossorigin>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Barlow+Semi+Condensed:wght@400;500;600;700&family=Doto:wght@800;900&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Barlow+Semi+Condensed:wght@400;500;600;700&display=swap">
 <style>
 :root{
   --sign:#FFCD00;      /* jaune poteau */
@@ -140,22 +140,26 @@ svg.i{width:22px;height:22px;flex:none}
 .note{margin:28px 16px 32px;font-size:14px;color:var(--muted);line-height:1.45}
 .warn{margin:12px 16px 0;padding:12px 14px;border-radius:10px;background:#FFF1C2;color:#3D2E00;font-size:15px}
 
-/* ---------- girouette ---------- */
-.gir{margin:14px 16px 4px;border-radius:16px;padding:16px 18px 18px;background-color:#000;color:var(--led);
-  background-image:radial-gradient(rgba(255,176,31,.10) 1px,transparent 1.3px);background-size:5px 5px;
-  box-shadow:inset 0 0 0 1px #2c2c2c}
-.gir .top{display:flex;align-items:center;gap:10px}
-.gir .top .q{margin-left:auto;color:#c9c9c9;font:600 16px var(--f-num)}
-.gir .to{margin-top:12px;font:900 27px/1.1 var(--f-led);text-transform:uppercase;letter-spacing:.02em;
-  text-shadow:0 0 10px rgba(255,176,31,.45);overflow-wrap:anywhere}
-.gir .row2{display:flex;align-items:flex-end;justify-content:space-between;gap:12px;margin-top:14px}
-.gir .big{font:900 60px/.9 var(--f-led);text-shadow:0 0 14px rgba(255,176,31,.5);white-space:nowrap}
-.gir .big small{font-size:30px}
+/* ---------- bus + panneau LED ---------- */
+.hero{margin:12px 16px 4px}
+.busbox{display:block;width:100%;max-width:400px;margin:0 auto -6px;padding:0;background:none;border:0;cursor:pointer;border-radius:12px}
+.busbox svg.bus{display:block;width:100%;height:auto}
+.gir{position:relative;border-radius:16px;padding:14px 16px 14px;background:#000;color:#fff;box-shadow:inset 0 0 0 1px #2c2c2c}
+.gir .row2{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.gir .ledbig{display:block;width:auto;height:auto;max-width:64%;flex:none}
 .gir .at{font:600 26px/1 var(--f-num);color:#fff;text-align:right}
 .gir .at span{display:block;font:500 15px var(--f-ui);color:#b5b5b5;margin-bottom:4px}
-.gir .then{margin-top:14px;padding-top:12px;border-top:1px dashed #3a3a3a;color:#d8d8d8;font:500 17px var(--f-num)}
-.gir .then b{color:#fff;font-weight:600;margin-right:12px}
-.gir.off .to{font-size:22px}
+.gir .then{display:flex;justify-content:space-between;gap:10px;margin-top:12px;padding-top:10px;border-top:1px dashed #3a3a3a;color:#d8d8d8;font:500 17px var(--f-num)}
+.gir .then b{color:#fff;font-weight:600;margin-left:10px}
+.gir .q{color:#c9c9c9;font:600 16px var(--f-num);white-space:nowrap}
+.gir .msg{color:var(--led);font:600 20px var(--f-num)}
+.nearcard{display:block;width:calc(100% - 32px);margin:6px 16px 0;padding:0;text-align:left}
+.nearcard .busbox{max-width:340px}
+.nearcard .where{display:flex;justify-content:space-between;gap:10px;margin-top:10px;padding-top:10px;border-top:1px dashed #3a3a3a;font:500 16px var(--f-ui);color:#d8d8d8}
+.nearcard .where b{color:#fff;font-weight:600}
+.near-cta{display:flex;align-items:center;gap:10px;width:calc(100% - 32px);margin:16px 16px 0;padding:14px 16px;border-radius:14px;
+  background:#000;color:var(--sign);font-weight:600;font-size:17px;text-align:left;box-shadow:inset 0 0 0 1px #2c2c2c}
+.near-cta small{display:block;color:#b5b5b5;font-weight:500;font-size:14px}
 
 /* ---------- fiche horaire ---------- */
 .fh{margin:8px 16px 0;border-top:2px solid var(--text)}
@@ -208,7 +212,7 @@ svg.i{width:22px;height:22px;flex:none}
 <body>
 <div id="app"><div class="loading"><span class="chip">bus</span><span>Chargement des horaires…</span></div></div>
 <div id="sheet"></div>
-
+<script src="bus.js"></script>
 <script>
 "use strict";
 /* ================== icônes ================== */
@@ -234,7 +238,7 @@ const norm = s => s.toLowerCase().replace(/œ/g,"oe").replace(/æ/g,"ae").normal
 const SYN = {st:"saint", ste:"sainte", sts:"saints", gare:"sncb", bd:"boulevard", av:"avenue", pl:"place", ch:"chaussee"};
 
 let D, X, T;                     // données, index, colonnes des courses
-const S = { day:null, view:"line", search:"" };   // état d'interface
+const S = { day:null, view:"line", search:"", bus:Math.floor(Math.random() * 6) };   // état d'interface
 
 /* ================== dates ================== */
 function todayParts(){ const d = new Date(); return [d.getFullYear(), d.getMonth() + 1, d.getDate(), d.getHours()*60 + d.getMinutes() + d.getSeconds()/60]; }
@@ -419,6 +423,60 @@ function validity(){
 }
 const footer = () => `<p class="note wrap">Horaires théoriques issus des données ouvertes TEC, valables du ${fmtDate.format(dateOf(0))} au ${fmtDate.format(dateOf(D.feed.days - 1))}. Les retards en temps réel ne sont pas pris en compte. Les couleurs des lignes servent à les distinguer et ne sont pas celles du TEC.</p>`;
 
+/* ================== bus + panneau LED ================== */
+function busFor(r, h, label){
+  const [a, b] = D.heads[h];
+  return busSVG(S.bus, D.routes[r][0], lcol(r)[0], a || b, a && b ? b : "", label);
+}
+function ledPanel(n, g, opts = {}){
+  const x = n[0];
+  if (!x) return `<div class="gir"><div class="msg">Plus de passage prévu aujourd'hui</div></div>`;
+  const c = countdown(x.t), far = x.off || x.t - Math.floor(nowMin()) >= 60, q = quai(g, x.s);
+  const big = far ? hm(x.t) : (c.now && c.txt === "maintenant" ? "0 MIN" : c.txt.toUpperCase());
+  const at = x.off ? `<span>départ demain</span>${hm(x.t)}` : far ? `<span>départ dans</span>${c.txt}` : `<span>${c.txt === "maintenant" ? "départ" : "départ à"}</span>${hm(x.t)}`;
+  const then = opts.where ? opts.where : (n.length > 1 || q) ? `<div class="then"><span>${n.length > 1 ? "Ensuite" + n.slice(1).map(y => `<b>${hm(y.t)}</b>`).join("") : ""}</span>${q ? `<span class="q">${q}</span>` : ""}</div>` : "";
+  return `<div class="gir" aria-live="polite">${opts.top || ""}<div class="row2">${ledBig(big, opts.pitch || 7)}<div class="at">${at}</div></div>${then}</div>`;
+}
+
+/* ================== arrêt le plus proche (accueil) ================== */
+const NEAR = { st:"idle", pos:null, t:0 };
+function nearestStops(la, lo, max = 3000){
+  const kx = 111320 * Math.cos(la * Math.PI / 180), res = [];
+  D.groups.forEach((g, i) => { if (!X.gRoutes[i].length) return;
+    const dm = Math.hypot((g[3] - la) * 110574, (g[4] - lo) * kx); if (dm < max) res.push([dm, i]); });
+  return res.sort((a, b) => a[0] - b[0]);
+}
+const fmtDist = dm => dm < 1000 ? Math.round(dm / 10) * 10 + " m" : (dm / 1000).toFixed(1).replace(".", ",") + " km";
+function locateNear(){
+  if (!navigator.geolocation){ NEAR.st = "na"; return; }
+  NEAR.st = "loading"; homeBody();
+  navigator.geolocation.getCurrentPosition(p => {
+    NEAR.pos = {la:p.coords.latitude, lo:p.coords.longitude}; NEAR.t = Date.now(); NEAR.st = "ok"; store.set("pb_geo", 1); homeBody();
+  }, e => { NEAR.st = e.code === 1 ? "denied" : "error"; homeBody(); }, {enableHighAccuracy:true, timeout:12000, maximumAge:60000});
+}
+function autoLocate(){
+  if (NEAR.st === "ok" && Date.now() - NEAR.t < 180000) return;
+  if (NEAR.st === "loading" || NEAR.st === "denied" || NEAR.st === "na") return;
+  if (store.get("pb_geo", 0)) return locateNear();
+  if (navigator.permissions && navigator.permissions.query)
+    navigator.permissions.query({name:"geolocation"}).then(r => { if (r.state === "granted") locateNear(); }).catch(() => {});
+}
+function nearCard(){
+  if (NEAR.st === "na" || NEAR.st === "denied") return "";
+  if (NEAR.st !== "ok") return `<button class="near-cta" data-act="locate">${I.pin}<span>${NEAR.st === "loading" ? "Recherche de l'arrêt le plus proche…"
+    : `Voir le prochain bus près de moi${NEAR.st === "error" ? "<small>Position introuvable, touche pour réessayer.</small>" : ""}`}</span></button>`;
+  const res = nearestStops(NEAR.pos.la, NEAR.pos.lo);
+  for (const [dm, g] of res.slice(0, 8)){
+    const n = nextDeps(g, null, 3); if (!n.length) continue;
+    const x = n[0], r = T.r[x.k];
+    const where = `<div class="where"><span>Arrêt <b>${esc(stopName(g))}</b></span><span>${fmtDist(dm)}</span></div>`;
+    return `<h2 class="sec">Le plus proche de toi</h2>
+      <button class="nearcard" data-act="go" data-to="#/a/${g}" aria-label="Prochain départ à ${esc(stopName(g))}">
+      <div class="busbox">${busFor(r, T.h[x.k], "Ligne " + D.routes[r][0] + " vers " + headTxt(T.h[x.k]))}</div>${ledPanel(n, g, {where, pitch:6})}</button>`;
+  }
+  return `<div class="empty">Aucun départ prévu près de toi.</div>`;
+}
+
 /* ================== vues ================== */
 const app = document.getElementById("app");
 let tick = null;
@@ -437,6 +495,7 @@ function viewHome(){
   const q = document.getElementById("q");
   q.addEventListener("input", () => { S.search = q.value; document.getElementById("sbox").classList.toggle("has", !!q.value); homeBody(); });
   homeBody();
+  autoLocate();
   tick = () => { if (!S.search) homeBody(); };
 }
 function homeBody(){
@@ -448,7 +507,7 @@ function homeBody(){
     return;
   }
   const favs = favList().map(parseFav).filter(Boolean);
-  let h = validity();
+  let h = validity() + nearCard();
   h += `<h2 class="sec">Favoris</h2>`;
   if (!favs.length) h += `<div class="empty">Cherche ton arrêt, puis touche l'étoile pour le retrouver ici avec ses prochains passages.</div>`;
   else h += `<div class="list">${favs.map(f => f.r != null ? favLineRow(f) : favStopRow(f.g)).join("")}</div>`;
@@ -528,21 +587,13 @@ function viewLine(g, r, d){
   const letters = new Map(); [...cnt.keys()].filter(h => h !== main).forEach((h, i) => letters.set(h, "abcdefghij"[i] || "*"));
   const now = Math.floor(nowMin());
 
-  let gir = "";
-  if (isToday){
-    const n = nextDeps(g, {r, d}, 4);
-    if (n.length){
-      const x = n[0], c = countdown(x.t), q = quai(g, x.s);
-      const far = x.off || x.t - Math.floor(nowMin()) >= 60;
-      const big = far ? hm(x.t) : (c.txt === "maintenant" ? "0<small> min</small>" : c.txt.replace(" min", "<small> min</small>"));
-      gir = `<section class="gir" aria-live="polite" aria-label="Prochain passage">
-        <div class="top">${chip(r)}${q ? `<span class="q">${q}</span>` : ""}</div>
-        <div class="to">${esc(headTxt(T.h[x.k]))}</div>
-        <div class="row2"><div class="big">${big}</div>
-          <div class="at">${x.off ? `<span>départ</span>demain` : far ? `<span>départ dans</span>${c.txt}` : `<span>${c.txt === "maintenant" ? "départ" : "départ à"}</span>${hm(x.t)}`}</div></div>
-        ${n.length > 1 ? `<div class="then">Ensuite ${n.slice(1).map(y => `<b>${hm(y.t)}</b>`).join("")}</div>` : ""}
-      </section>`;
-    } else gir = `<section class="gir off"><div class="top">${chip(r)}</div><div class="to">Plus de passage prévu</div></section>`;
+  let gir;
+  {
+    const n = isToday ? nextDeps(g, {r, d}, 4) : [];
+    const h = n.length ? T.h[n[0].k] : main;
+    gir = `<section class="hero" aria-label="Prochain passage">
+      <button class="busbox" data-act="bus" aria-label="Changer de bus">${busFor(r, h, "Ligne " + D.routes[r][0] + " vers " + headTxt(h))}</button>
+      ${isToday ? ledPanel(n, g) : ""}</section>`;
   }
   // fiche horaire par heure
   let nextMarked = false; const rows = new Map();
@@ -575,13 +626,9 @@ function viewNear(){
   const el = document.getElementById("nearBody");
   if (!navigator.geolocation){ el.innerHTML = `<div class="empty">La localisation n'est pas disponible sur cet appareil.</div>`; return; }
   navigator.geolocation.getCurrentPosition(pos => {
-    const {latitude:la, longitude:lo} = pos.coords, kx = 111320 * Math.cos(la * Math.PI / 180);
-    const res = [];
-    D.groups.forEach((g, i) => { if (!X.gRoutes[i].length) return;
-      const dm = Math.hypot((g[3] - la) * 110574, (g[4] - lo) * kx); if (dm < 3000) res.push([dm, i]); });
-    res.sort((a, b) => a[0] - b[0]);
-    const top = res.slice(0, 15);
-    el.innerHTML = top.length ? `<div class="list">${top.map(([dm, g]) => stopRow(g, `<span class="dist">${dm < 1000 ? Math.round(dm / 10) * 10 + " m" : (dm / 1000).toFixed(1).replace(".", ",") + " km"}</span>`)).join("")}</div>`
+    NEAR.pos = {la:pos.coords.latitude, lo:pos.coords.longitude}; NEAR.t = Date.now(); NEAR.st = "ok"; store.set("pb_geo", 1);
+    const top = nearestStops(NEAR.pos.la, NEAR.pos.lo).slice(0, 15);
+    el.innerHTML = top.length ? `<div class="list">${top.map(([dm, g]) => stopRow(g, `<span class="dist">${fmtDist(dm)}</span>`)).join("")}</div>`
       : `<div class="empty">Aucun arrêt TEC Hainaut à moins de 3 km de ta position.</div>`;
   }, err => {
     el.innerHTML = `<div class="empty">${err.code === 1 ? "La localisation est refusée. Autorise-la pour cette app dans les réglages de ton téléphone, puis réessaie." : "Ta position n'a pas pu être trouvée. Réessaie dans un endroit plus dégagé."}</div>
@@ -614,6 +661,7 @@ function route(){
   closeSheet();
   const h = location.hash || "#/";
   const changed = h !== lastHash; lastHash = h;
+  if (changed && lastHash !== null) S.bus = (S.bus + 1 + Math.floor(Math.random() * 5)) % 6;
   let m;
   if ((m = h.match(/^#\/a\/(\d+)\/l\/(\d+)\/(\d+)/)) && D.groups[+m[1]] && D.routes[+m[2]]) viewLine(+m[1], +m[2], +m[3]);
   else if ((m = h.match(/^#\/a\/(\d+)/)) && D.groups[+m[1]]) { if (changed) S.limit = 40; viewStop(+m[1]); }
@@ -632,6 +680,8 @@ document.addEventListener("click", e => {
     if (history.length > 1 && sessionStorage.getItem("pb_nav")) history.back(); else location.hash = m ? "#/a/" + m[1] : "#/"; }
   else if (a === "fav"){ const r = el.dataset.r != null ? +el.dataset.r : null; toggleFav(+el.dataset.g, r, r != null ? +el.dataset.d : null); route(); }
   else if (a === "day"){ S.day = +el.dataset.day; route(); }
+  else if (a === "bus"){ S.bus = (S.bus + 1) % 6; route(); }
+  else if (a === "locate"){ locateNear(); }
   else if (a === "vw"){ S.view = el.dataset.v; store.set("pb_view", S.view); route(); }
   else if (a === "more"){ S.limit = (S.limit || 40) + 40; route(); }
   else if (a === "trip"){ openTrip(+el.dataset.k, +el.dataset.i, +el.dataset.g); }

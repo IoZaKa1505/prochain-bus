@@ -1,7 +1,7 @@
 /* Prochain bus — fonctionnement hors ligne.
    Change VERSION à chaque mise à jour des fichiers pour forcer le rafraîchissement. */
-const VERSION = "pb-2026-11-10c";
-const SHELL = ["./", "index.html", "data.json", "manifest.webmanifest", "icon-192.png", "icon-512.png", "apple-touch-icon.png"];
+const VERSION = "pb-2026-11-10d";
+const SHELL = ["./", "index.html", "bus.js", "data.json", "manifest.webmanifest", "icon-192.png", "icon-512.png", "apple-touch-icon.png"];
 
 self.addEventListener("install", e => {
   e.waitUntil(caches.open(VERSION).then(c => c.addAll(SHELL)).then(() => self.skipWaiting()));
