@@ -65,17 +65,47 @@ const LED = (() => {
     "Ô":["O","..#.."], "Ö":["O",".#.#."], "Û":["U","..#.."], "Ü":["U",".#.#."], "Ù":["U",".#..."] };
   for (const [ch, [b, a]] of Object.entries(acc)) F[ch] = [a, ...six[b]];
 
-  function glyph(ch){
+  // police étroite (4 colonnes) pour les destinations longues, comme sur les vrais afficheurs
+  const N = {
+    "A": g(".##. #..# #..# #### #..# #..# #..#"), "B": g("###. #..# #..# ###. #..# #..# ###."),
+    "C": g(".##. #..# #... #... #... #..# .##."), "D": g("###. #..# #..# #..# #..# #..# ###."),
+    "E": g("#### #... #... ###. #... #... ####"), "F": g("#### #... #... ###. #... #... #..."),
+    "G": g(".##. #..# #... #.## #..# #..# .###"), "H": g("#..# #..# #..# #### #..# #..# #..#"),
+    "I": g("# # # # # # #"), "J": g("...# ...# ...# ...# ...# #..# .##."),
+    "K": g("#..# #.#. ##.. ##.. #.#. #..# #..#"), "L": g("#... #... #... #... #... #... ####"),
+    "M": F["M"], "N": g("#..# ##.# ##.# #.## #.## #..# #..#"),
+    "O": g(".##. #..# #..# #..# #..# #..# .##."), "P": g("###. #..# #..# ###. #... #... #..."),
+    "Q": g(".##. #..# #..# #..# #.#. #..# .#.#"), "R": g("###. #..# #..# ###. #.#. #..# #..#"),
+    "S": g(".### #... #... .##. ...# ...# ###."), "T": g("### .#. .#. .#. .#. .#. .#."),
+    "U": g("#..# #..# #..# #..# #..# #..# .##."), "V": g("#..# #..# #..# #..# #..# .##. .##."),
+    "W": F["W"], "X": g("#..# #..# .##. .##. .##. #..# #..#"), "Y": g("#.# #.# #.# .#. .#. .#. .#."),
+    "Z": g("#### ...# ..#. .#.. .#.. #... ####"),
+    "0": g(".##. #..# #..# #..# #..# #..# .##."), "1": g(".# ## .# .# .# .# .#"),
+    "2": g(".##. #..# ...# ..#. .#.. #... ####"), "3": g("###. ...# ...# .##. ...# ...# ###."),
+    "4": g("..#. .##. #.#. #.#. #### ..#. ..#."), "5": g("#### #... ###. ...# ...# #..# .##."),
+    "6": g(".##. #... #... ###. #..# #..# .##."), "7": g("#### ...# ..#. ..#. .#.. .#.. .#.."),
+    "8": g(".##. #..# #..# .##. #..# #..# .##."), "9": g(".##. #..# #..# .### ...# ...# .##."),
+    " ": g(".. .. .. .. .. .. .."), "-": g(".. .. .. ## .. .. .."), "/": g("..# ..# .#. .#. .#. #.. #.."),
+    "Ç": g(".##. #..# #... #... #..# .##. .#.."),
+  };
+  const nsix = { E: g("#### #... ###. #... #... ####"), A: g(".##. #..# #..# #### #..# #..#"),
+    I: g("# # # # # #"), O: g(".##. #..# #..# #..# #..# .##."), U: g("#..# #..# #..# #..# #..# .##.") };
+  const nacc = { "É":["E","..#."], "È":[ "E",".#.."], "Ê":["E",".##."], "Ë":["E","#..#"], "À":["A",".#.."], "Â":["A",".##."],
+    "Ä":["A","#..#"], "Î":["I","#"], "Ï":["I","#"], "Ô":["O",".##."], "Ö":["O","#..#"], "Û":["U",".##."], "Ü":["U","#..#"], "Ù":["U",".#.."] };
+  for (const [ch, [b, a]] of Object.entries(nacc)) N[ch] = [a, ...nsix[b]];
+
+  const strip = ch => ch.normalize("NFD").replace(/[̀-ͯ]/g, "");
+  function glyph(ch, narrow){
+    if (narrow){ if (N[ch]) return N[ch]; const b = strip(ch); if (N[b]) return N[b]; }
     if (F[ch]) return F[ch];
-    const base = ch.normalize("NFD").replace(/[̀-ͯ]/g, "");
-    return F[base] || null;
+    return F[strip(ch)] || null;
   }
   /* -> { w: largeur en colonnes, px: [[x,y],...] } */
-  function layout(text){
+  function layout(text, narrow){
     let x = 0; const px = [];
     for (const ch of String(text).toUpperCase()){
-      const gl = glyph(ch);
-      if (!gl){ x += 4; continue; }
+      const gl = glyph(ch, narrow);
+      if (!gl){ x += narrow ? 3 : 4; continue; }
       gl.forEach((row, y) => { for (let i = 0; i < row.length; i++) if (row[i] === "#") px.push([x + i, y]); });
       x += gl[0].length + 1;
     }
@@ -99,39 +129,79 @@ let LEDID = 0;
 const r2 = n => Math.round(n * 100) / 100;
 
 /* ================== afficheur avant (dans le bus) ================== */
-/* box: {x,y,w,h} en unités SVG ; num: numéro de ligne ; numCol: couleur ; l1/l2: deux lignes de destination */
-function ledDisplay(box, num, numCol, l1, l2){
+// abréviations légères (comme sur les vrais afficheurs) puis fortes (dernier recours)
+const LIGHT = [[/\bCHAPELLE-LEZ-HERLAIMONT\b/g,"CHAPELLE"],[/\s*\([^)]*\)/g,""],[/\bSAINTE-/g,"STE-"],[/\bSAINT-/g,"ST-"],
+  [/\bSAINTE\b/g,"STE"],[/\bSAINT\b/g,"ST"],[/([A-ZÀ-ÞŒ.'\-]+)\/[A-ZÀ-ÞŒ.'\-]+/g,"$1"]]; // noms bilingues : on garde le français
+const HEAVY = [[/\bCARREFOUR\b/g,"CARREF."],[/\bCHAUSSÉE\b/g,"CHÉE"],[/\bCOMMUNALE\b/g,"COM."],[/\bCOMMERCIAL\b/g,"COMM."],
+  [/\bCENTRE\b/g,"CTRE"],[/\bAVENUE\b/g,"AV."],[/\bBOULEVARD\b/g,"BD"],[/\bROUTE\b/g,"RTE"],[/\bPLACE\b/g,"PL."],[/\bRUE\b/g,"R."],
+  [/\bCHARBONNAGE\b/g,"CHARB."],[/\bHÔPITAL\b/g,"HÔP."],[/-LEZ-/g,"-L-"],[/\bSTATION\b/g,"ST."],[/\bÉGLISE\b/g,"ÉGL."]];
+const abbr = (t, list) => list.reduce((acc, [re, r]) => acc.replace(re, r), t);
+/* meilleure coupure en deux lignes (sur les espaces et les tirets) */
+function split2(text, narrow){
+  const toks = text.match(/[^ \-\/]+[ \-\/]?/g) || [text];
+  let best = null;
+  for (let k = 1; k < toks.length; k++){
+    const a = toks.slice(0, k).join("").trim(), b = toks.slice(k).join("").trim();
+    // couper au milieu d'un nom composé (tiret, barre) seulement en dernier recours
+    const m = Math.max(LED.layout(a, narrow).w, LED.layout(b, narrow).w) + (/[\-\/]$/.test(toks[k - 1]) ? 40 : 0);
+    if (!best || m < best[0]) best = [m, a, b];
+  }
+  return best;
+}
+/* mise en page : une ligne si ça tient, sinon deux lignes (jamais de défilement) */
+function plan(town, place, area){
+  const T0 = town.toUpperCase(), P0 = place.toUpperCase(), full = (T0 + " " + P0).trim();
+  const fits = (t, narrow) => LED.layout(t, narrow).w <= area;
+  const two = (T, P, txt, narrow) => {
+    if (T && P && fits(T, narrow) && fits(P, narrow)) return {two: [T, P], narrow};   // commune / lieu
+    const b = split2(txt, narrow);
+    if (b && fits(b[1], narrow) && fits(b[2], narrow)) return {two: [b[1], b[2]], narrow};
+    return null;
+  };
+  const TL = abbr(T0, LIGHT), PL = abbr(P0, LIGHT), light = (TL + " " + PL).trim();
+  const TH = abbr(TL, HEAVY), PH = abbr(PL, HEAVY), heavy = (TH + " " + PH).trim();
+  if (fits(full)) return {one: full};
+  if (fits(light)) return {one: light};
+  return two(T0, P0, full, false) || two(TL, PL, light, false) || two(TL, PL, light, true)
+    || (fits(heavy) ? {one: heavy} : null) || two(TH, PH, heavy, false) || two(TH, PH, heavy, true)
+    || (() => { const b = split2(heavy, true) || [0, heavy, ""]; return {two: [b[1], b[2]], narrow: true, cut: true}; })();
+}
+
+/* box: {x,y,w,h} en unités SVG ; num: numéro de ligne ; numCol: couleur ; town/place: destination */
+function ledDisplay(box, num, numCol, town, place){
   const id = "d" + (++LEDID);
-  const rows = 15, p = box.h / rows, cols = Math.floor(box.w / p), ox = box.x + (box.w - cols * p) / 2, oy = box.y;
+  const rows = 18, p = box.h / rows, cols = Math.floor(box.w / p), ox = box.x + (box.w - cols * p) / 2, oy = box.y;
   const amber = "#FFB01F", rad = r2(p * .4);
-  const dot = (cx, cy, c) => `<circle cx="${r2(ox + (cx + .5) * p)}" cy="${r2(oy + (cy + .5) * p)}" r="${rad}" fill="${c}"/>`;
+  const dot = (cx, cy, c) => cx < cols ? `<circle cx="${r2(ox + (cx + .5) * p)}" cy="${r2(oy + (cy + .5) * p)}" r="${rad}" fill="${c}"/>` : "";
   let lit = "";
-  // numéro de ligne en double taille, dans la couleur de la ligne
+  // numéro de ligne : double taille dans la couleur de la ligne (en haute et étroit s'il est long, ex. CityO)
   const n = LED.layout(num);
-  for (const [x, y] of n.px) for (let a = 0; a < 2; a++) for (let b = 0; b < 2; b++) lit += dot(1 + x*2 + a, y*2 + b + .5, numCol);
-  const areaX = 1 + n.w * 2 + 4, areaW = cols - areaX - 1;
-  const lines = l2 ? [[l1, 0], [l2, 8]] : [[l1, 4]];
-  let anim = "", scroll = "";
-  lines.forEach(([txt, row], i) => {
-    const L = LED.layout(txt);
-    let g = L.px.map(([x, y]) => dot(areaX + x, row + y, amber)).join("");
-    if (L.w > areaW){
-      const over = L.w - areaW, dur = Math.max(5, over * .12 + 4);
-      anim += `@keyframes ${id}k${i}{0%,22%{transform:translateX(0)}78%,100%{transform:translateX(${r2(-over * p)}px)}}`;
-      g = `<g style="animation:${id}k${i} ${r2(dur)}s steps(${over}) infinite alternate">${g}</g>`;
-      scroll += `<g clip-path="url(#${id}c)">${g}</g>`;
-    } else scroll += g;
-  });
+  let big = n.w * 2 <= 34, nw = big ? n.w * 2 : n.w;
+  let L = plan(town || "", place || "", cols - (1 + nw + 3) - 1);
+  if (big && (L.cut || L.narrow)){ // numéro plus étroit si la destination manque de place
+    const L2 = plan(town || "", place || "", cols - (1 + n.w + 3) - 1);
+    if (!L2.cut && (L.cut || !L2.narrow)){ big = false; nw = n.w; L = L2; }
+  }
+  for (const [x, y] of n.px){
+    if (big){ for (let a = 0; a < 2; a++) for (let b = 0; b < 2; b++) lit += dot(1 + x*2 + a, 2 + y*2 + b, numCol); }
+    else for (let b = 0; b < 2; b++) lit += dot(1 + x, 2 + y*2 + b, numCol);
+  }
+  const areaX = 1 + nw + 3, area = cols - areaX - 1;
+  if (L.one){ // une seule ligne, en lettres hautes
+    for (const [x, y] of LED.layout(L.one).px) for (let b = 0; b < 2; b++) lit += dot(areaX + x, 2 + y*2 + b, amber);
+  } else {
+    [[L.two[0], 1], [L.two[1], 10]].forEach(([txt, row]) => {
+      for (const [x, y] of LED.layout(txt, L.narrow).px) if (x < area) lit += dot(areaX + x, row + y, amber);
+    });
+  }
   return `<g class="led">
     <defs><pattern id="${id}p" width="${r2(p)}" height="${r2(p)}" patternUnits="userSpaceOnUse" x="${r2(ox)}" y="${r2(oy)}">
       <circle cx="${r2(p/2)}" cy="${r2(p/2)}" r="${rad}" fill="#2a1f0a"/></pattern>
-      <clipPath id="${id}c"><rect x="${r2(ox + areaX * p - p*.5)}" y="${r2(oy)}" width="${r2(areaW * p + p)}" height="${r2(box.h)}"/></clipPath>
       <filter id="${id}f" x="-5%" y="-20%" width="110%" height="140%"><feGaussianBlur stdDeviation="${r2(p*.55)}" result="b"/>
-        <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
-      ${anim ? `<style>${anim}@media (prefers-reduced-motion:reduce){.led g{animation:none!important}}</style>` : ""}</defs>
+        <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs>
     <rect x="${r2(box.x - 2)}" y="${r2(box.y - 2)}" width="${r2(box.w + 4)}" height="${r2(box.h + 4)}" rx="2.5" fill="#050505"/>
     <rect x="${r2(box.x)}" y="${r2(box.y)}" width="${r2(box.w)}" height="${r2(box.h)}" fill="url(#${id}p)"/>
-    <g filter="url(#${id}f)">${lit}${scroll}</g></g>`;
+    <g filter="url(#${id}f)">${lit}</g></g>`;
 }
 
 /* ================== grand texte LED (heure / minutes) ================== */
@@ -240,7 +310,7 @@ const BUSES = [
   }
 ];
 
-/* bus complet : model = index, num = numéro de ligne, col = couleur de ligne, l1/l2 = destination */
+/* bus complet : model = index, num = numéro de ligne, col = couleur de ligne, town/place = destination */
 function busSVG(model, num, col, l1, l2, label){
   const B = BUSES[((model % BUSES.length) + BUSES.length) % BUSES.length];
   const u = "u" + (++LEDID);

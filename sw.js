@@ -1,6 +1,6 @@
 /* Prochain bus — fonctionnement hors ligne.
    Change VERSION à chaque mise à jour des fichiers pour forcer le rafraîchissement. */
-const VERSION = "pb-2026-11-10d";
+const VERSION = "pb-2026-11-10e";
 const SHELL = ["./", "index.html", "bus.js", "data.json", "manifest.webmanifest", "icon-192.png", "icon-512.png", "apple-touch-icon.png"];
 
 self.addEventListener("install", e => {
