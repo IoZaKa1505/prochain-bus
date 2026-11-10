@@ -148,59 +148,63 @@ function split2(text, narrow){
   }
   return best;
 }
-/* mise en page : une ligne si ça tient, sinon deux lignes (jamais de défilement) */
-function plan(town, place, area){
+/* mise en page : la plus grande écriture possible.
+   Une ligne si elle donne des lettres au moins aussi grandes que deux lignes ; sinon deux lignes. Jamais de défilement. */
+function plan(town, place, aw, ah){
   const T0 = town.toUpperCase(), P0 = place.toUpperCase(), full = (T0 + " " + P0).trim();
-  const fits = (t, narrow) => LED.layout(t, narrow).w <= area;
-  const two = (T, P, txt, narrow) => {
-    if (T && P && fits(T, narrow) && fits(P, narrow)) return {two: [T, P], narrow};   // commune / lieu
-    const b = split2(txt, narrow);
-    if (b && fits(b[1], narrow) && fits(b[2], narrow)) return {two: [b[1], b[2]], narrow};
-    return null;
-  };
   const TL = abbr(T0, LIGHT), PL = abbr(P0, LIGHT), light = (TL + " " + PL).trim();
   const TH = abbr(TL, HEAVY), PH = abbr(PL, HEAVY), heavy = (TH + " " + PH).trim();
-  if (fits(full)) return {one: full};
-  if (fits(light)) return {one: light};
-  return two(T0, P0, full, false) || two(TL, PL, light, false) || two(TL, PL, light, true)
-    || (fits(heavy) ? {one: heavy} : null) || two(TH, PH, heavy, false) || two(TH, PH, heavy, true)
-    || (() => { const b = split2(heavy, true) || [0, heavy, ""]; return {two: [b[1], b[2]], narrow: true, cut: true}; })();
+  const pitch = (lines, narrow) => {
+    const w = Math.max(...lines.map(t => LED.layout(t, narrow).w), 1), rows = lines.length === 1 ? 7 : 15;
+    return Math.min(ah / (rows + .4), aw / w);
+  };
+  const cands = [];
+  const add = (lines, narrow, bonus = 1) => { if (lines.every(Boolean)) cands.push({lines, narrow, p: pitch(lines, narrow) * bonus}); };
+  // une ligne (complète, puis abréviations légères)
+  add([full], false); add([light], false, .97);
+  // deux lignes : commune / lieu d'abord, puis meilleure coupure ; police étroite en dernier
+  for (const [T, P, txt, k] of [[T0, P0, full, 1], [TL, PL, light, .97], [TH, PH, heavy, .75]])
+    for (const narrow of [false, true]){
+      const nb = narrow ? .93 : 1;
+      if (T && P) add([T, P], narrow, k * nb);
+      const sp = split2(txt, narrow); if (sp) add([sp[1], sp[2]], narrow, k * nb * .96);
+    }
+  add([heavy], false, .75);
+  // à taille égale, on préfère une seule ligne
+  cands.sort((x, y) => (y.p * (y.lines.length === 1 ? 1.06 : 1)) - (x.p * (x.lines.length === 1 ? 1.06 : 1)));
+  const c = cands[0];
+  return {lines: c.lines, narrow: c.narrow, p: pitch(c.lines, c.narrow)};
 }
 
-/* box: {x,y,w,h} en unités SVG ; num: numéro de ligne ; numCol: couleur ; town/place: destination */
-function ledDisplay(box, num, numCol, town, place){
-  const id = "d" + (++LEDID);
-  const rows = 18, p = box.h / rows, cols = Math.floor(box.w / p), ox = box.x + (box.w - cols * p) / 2, oy = box.y;
-  const amber = "#FFB01F", rad = r2(p * .4);
-  const dot = (cx, cy, c) => cx < cols ? `<circle cx="${r2(ox + (cx + .5) * p)}" cy="${r2(oy + (cy + .5) * p)}" r="${rad}" fill="${c}"/>` : "";
+/* box: {x,y,w,h} en unités SVG ; num: numéro de ligne ; colors: [fond, texte] de la ligne ; town/place: destination */
+function ledDisplay(box, num, colors, town, place){
+  const id = "d" + (++LEDID), [bg, fg] = Array.isArray(colors) ? colors : [colors, "#000"];
+  const amber = "#FFB01F", pad = box.h * .1;
+  // numéro de ligne dans un carré de la couleur de la ligne (comme les pastilles)
+  const n = LED.layout(num), nh = box.h - 2 * pad, pn = nh * .74 / 7;
+  const nbw = Math.max(nh * .95, n.w * pn + 2.6 * pn), nbx = box.x + pad, nby = box.y + pad;
+  const nox = nbx + (nbw - n.w * pn) / 2, noy = nby + (nh - 7 * pn) / 2;
+  const numDots = n.px.map(([x, y]) => `<rect x="${r2(nox + x * pn + pn * .08)}" y="${r2(noy + y * pn + pn * .08)}" width="${r2(pn * .84)}" height="${r2(pn * .84)}" rx="${r2(pn * .3)}" fill="${fg}"/>`).join("");
+  // destination : remplit toute la zone restante
+  const ax = nbx + nbw + pad * 1.1, aw = box.x + box.w - pad * .7 - ax, ay = box.y + pad * .55, ah = box.h - pad * 1.1;
+  const L = plan(town || "", place || "", aw, ah), p = L.p, rad = r2(p * .4);
+  const rows = L.lines.length === 1 ? 7 : 15;
+  const widths = L.lines.map(t => LED.layout(t, L.narrow).w), tw = Math.max(...widths) * p;
+  const ox = ax + (aw - tw) / 2, oy = ay + (ah - rows * p) / 2;
   let lit = "";
-  // numéro de ligne : double taille dans la couleur de la ligne (en haute et étroit s'il est long, ex. CityO)
-  const n = LED.layout(num);
-  let big = n.w * 2 <= 34, nw = big ? n.w * 2 : n.w;
-  let L = plan(town || "", place || "", cols - (1 + nw + 3) - 1);
-  if (big && (L.cut || L.narrow)){ // numéro plus étroit si la destination manque de place
-    const L2 = plan(town || "", place || "", cols - (1 + n.w + 3) - 1);
-    if (!L2.cut && (L.cut || !L2.narrow)){ big = false; nw = n.w; L = L2; }
-  }
-  for (const [x, y] of n.px){
-    if (big){ for (let a = 0; a < 2; a++) for (let b = 0; b < 2; b++) lit += dot(1 + x*2 + a, 2 + y*2 + b, numCol); }
-    else for (let b = 0; b < 2; b++) lit += dot(1 + x, 2 + y*2 + b, numCol);
-  }
-  const areaX = 1 + nw + 3, area = cols - areaX - 1;
-  if (L.one){ // une seule ligne, en lettres hautes
-    for (const [x, y] of LED.layout(L.one).px) for (let b = 0; b < 2; b++) lit += dot(areaX + x, 2 + y*2 + b, amber);
-  } else {
-    [[L.two[0], 1], [L.two[1], 10]].forEach(([txt, row]) => {
-      for (const [x, y] of LED.layout(txt, L.narrow).px) if (x < area) lit += dot(areaX + x, row + y, amber);
-    });
-  }
+  L.lines.forEach((t, i) => {
+    const lay = LED.layout(t, L.narrow), dx = Math.round((Math.max(...widths) - lay.w) / 2);  // chaque ligne centrée
+    for (const [x, y] of lay.px) lit += `<circle cx="${r2(ox + (dx + x + .5) * p)}" cy="${r2(oy + (i * 8 + y + .5) * p)}" r="${rad}" fill="${amber}"/>`;
+  });
   return `<g class="led">
     <defs><pattern id="${id}p" width="${r2(p)}" height="${r2(p)}" patternUnits="userSpaceOnUse" x="${r2(ox)}" y="${r2(oy)}">
       <circle cx="${r2(p/2)}" cy="${r2(p/2)}" r="${rad}" fill="#2a1f0a"/></pattern>
-      <filter id="${id}f" x="-5%" y="-20%" width="110%" height="140%"><feGaussianBlur stdDeviation="${r2(p*.55)}" result="b"/>
+      <clipPath id="${id}c"><rect x="${r2(ax - p * .3)}" y="${r2(box.y + 1)}" width="${r2(aw + p * .6)}" height="${r2(box.h - 2)}"/></clipPath>
+      <filter id="${id}f" x="-5%" y="-20%" width="110%" height="140%"><feGaussianBlur stdDeviation="${r2(p*.5)}" result="b"/>
         <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs>
     <rect x="${r2(box.x - 2)}" y="${r2(box.y - 2)}" width="${r2(box.w + 4)}" height="${r2(box.h + 4)}" rx="2.5" fill="#050505"/>
-    <rect x="${r2(box.x)}" y="${r2(box.y)}" width="${r2(box.w)}" height="${r2(box.h)}" fill="url(#${id}p)"/>
+    <rect x="${r2(ax - p * .3)}" y="${r2(box.y + 1)}" width="${r2(aw + p * .6)}" height="${r2(box.h - 2)}" fill="url(#${id}p)" clip-path="url(#${id}c)"/>
+    <rect x="${r2(nbx)}" y="${r2(nby)}" width="${r2(nbw)}" height="${r2(nh)}" rx="${r2(nh * .14)}" fill="${bg}"/>${numDots}
     <g filter="url(#${id}f)">${lit}</g></g>`;
 }
 
@@ -310,7 +314,7 @@ const BUSES = [
   }
 ];
 
-/* bus complet : model = index, num = numéro de ligne, col = couleur de ligne, town/place = destination */
+/* bus complet : model = index, num = numéro de ligne, col = [fond, texte] de la ligne, l1/l2 = commune / lieu */
 function busSVG(model, num, col, l1, l2, label){
   const B = BUSES[((model % BUSES.length) + BUSES.length) % BUSES.length];
   const u = "u" + (++LEDID);
@@ -327,5 +331,5 @@ function busSVG(model, num, col, l1, l2, label){
   const fix = s => s.replace(/url\(#(BODY|SIDE|GL|GLB|ROOF|CHROME|TREAD)\)/g, `url(#${u}$1)`);
   const body = `<path d="${B.body}" fill="url(#BODY)"/><rect x="40" y="0" width="320" height="300" fill="url(#SIDE)" clip-path="url(#${u}CLIP)"/>
     <rect x="40" y="290" width="320" height="12" fill="rgba(0,0,0,.10)" clip-path="url(#${u}CLIP)"/>`;
-  return `<svg class="bus" viewBox="0 0 400 340" role="img" aria-label="${label || ""}">${defs}${fix(shadow + tires(B.disp.y > 50 ? 286 : 286) + body + B.draw(ledDisplay(B.disp, num, ledColor(col), l1, l2)))}</svg>`;
+  return `<svg class="bus" viewBox="0 0 400 340" role="img" aria-label="${label || ""}">${defs}${fix(shadow + tires() + body + B.draw(ledDisplay(B.disp, num, col, l1, l2)))}</svg>`;
 }

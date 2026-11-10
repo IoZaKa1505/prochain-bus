@@ -426,7 +426,7 @@ const footer = () => `<p class="note wrap">Horaires théoriques issus des donné
 /* ================== bus + panneau LED ================== */
 function busFor(r, h, label){
   const [a, b] = D.heads[h];
-  return busSVG(S.bus, D.routes[r][0], lcol(r)[0], a || b, a && b ? b : "", label);
+  return busSVG(S.bus, D.routes[r][0], lcol(r), a || b, a && b ? b : "", label);
 }
 function ledPanel(n, g, opts = {}){
   const x = n[0];
